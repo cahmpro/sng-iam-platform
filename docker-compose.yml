@@ -18,6 +18,7 @@ services:
       DOCKER_API_VERSION: "1.45"
     networks:
       - frontend
+      - obs.network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
@@ -218,3 +219,5 @@ networks:
     external: true  # Réseau interne Sign&go
   frontend:
     external: true  # Réseau exposé à Traefik
+  obs.network:
+    external: true # Réseau externe
