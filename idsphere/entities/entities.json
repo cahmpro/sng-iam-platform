@@ -1,0 +1,107 @@
+{
+    "entities": {
+        "Person": {
+            "extendsEntity": "person",
+            "attributeDescriptors": {
+                "groupId": {
+                    "type": "INTEGER"
+                },
+                "firstName": {
+                    "type": "STRING",
+                    "normalizeSearch": "true"
+                },
+                "lastName": {
+                    "type": "STRING",
+                    "normalizeSearch": "true"
+                },
+                "cerbereUID": {
+                    "type": "STRING"
+                },
+                "address": {
+                    "type": "STRING"
+                },
+                "postalCode": {
+                    "type": "STRING"
+                },
+                "city": {
+                    "type": "STRING"
+                },
+                "telephone": {
+                    "type": "STRING"
+                },
+                "admin": {
+                    "type": "STRING"
+                },
+                "matricule": {
+                    "type": "STRING"
+                },
+                "hidden": {
+                    "type": "BOOLEAN"
+                },
+                "domain": {
+                    "type": "STRING"
+                },
+                "fax": {
+                    "type": "STRING"
+                },
+                "accountType": {
+                    "type": "DICTIONARY"
+                },
+                "civility": {
+                    "type": "DICTIONARY"
+                },
+                "country": {
+                    "type": "STRING"
+                },
+                "trusted": {
+                    "type": "BOOLEAN"
+                },
+                "useCertificate": {
+                    "type": "BOOLEAN"
+                },
+                "mailPr": {
+                    "type": "STRING"
+                },
+                "fcId": {
+                    "type": "STRING"
+                },
+                "roomNumber": {
+                    "type": "STRING"
+                },
+                "authLevelMin": {
+                    "type": "DICTIONARY"
+                },
+                "synchroCerbereV1Status": {
+                    "type": "DICTIONARY"
+                },
+                "fullName": {
+                    "type": "STRING",
+                    "normalizeSearch": "true"
+                },
+                "displayName": {
+                    "type": "STRING",
+                    "normalizeSearch": "true"
+                },
+                "description": {
+                    "type": "STRING",
+                    "normalizeSearch": "true"
+                },
+                "codePays": {
+                    "type": "STRING"
+                },
+                "custom": {
+                    "type": "STRING"
+                }
+            },
+            "notifiable": false,
+            "toStrings": [
+                "uid",
+                "cerbereUID",
+                "email"
+            ],
+            "sortDefaults": [],
+            "customCode": []
+        }
+    },
+    "version": 2
+}

@@ -1,0 +1,94 @@
+networks:
+  frontend:
+    external: true
+  ids.network:
+    driver: bridge
+
+volumes:
+  idsphere.dbdata:
+  idsphere.jar:
+
+services:
+
+  # ============================================================================
+  # IDSPHERE DATABASE — PostgreSQL 17 dédié
+  # ============================================================================
+  idsphere.db:
+    image: postgres:17
+    container_name: idsphere.db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: idsphere
+      POSTGRES_USER: idsphere
+      POSTGRES_PASSWORD: ${IDS_DB_PASSWORD}
+    volumes:
+      - idsphere.dbdata:/var/lib/postgresql/data
+    networks:
+      - ids.network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U idsphere -d idsphere"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # IDSPHERE WORKFLOW — Backend (workflows, provisioning, scheduler)
+  # ============================================================================
+  ids-workflow:
+    image: afr2k7pd.gra7.container-registry.ovh.net/fr-ilex/idsphere/ids-workflow:5.1.0
+    container_name: ids-workflow
+    restart: unless-stopped
+    environment:
+      - spring.datasource.url=jdbc:postgresql://idsphere.db:5432/idsphere
+      - spring.datasource.username=idsphere
+      - spring.datasource.password=${IDS_DB_PASSWORD}
+      - spring.datasource.driver-class-name=org.postgresql.Driver
+      - server.port=8081
+      - ids.workflow.jwt.passphrase=${IDS_WORKFLOW_JWT_PASSPHRASE}
+      - ids.license=${IDS_LICENSE}
+    volumes:
+      - /var/lib/docker/volumes/sng-project_idsphere.jar/_data/ids-generated-entities.jar:/workflow/WEB-INF/lib/ids-generated-entities.jar:ro
+    networks:
+      - ids.network
+    depends_on:
+      idsphere.db:
+        condition: service_healthy
+
+  # ============================================================================
+  # IDSPHERE WEB — Interface admin et utilisateur
+  # ============================================================================
+  ids-web:
+    image: afr2k7pd.gra7.container-registry.ovh.net/fr-ilex/idsphere/ids-web:5.1.0
+    container_name: ids-web
+    restart: unless-stopped
+    environment:
+      - spring.datasource.url=jdbc:postgresql://idsphere.db:5432/idsphere
+      - spring.datasource.username=idsphere
+      - spring.datasource.password=${IDS_DB_PASSWORD}
+      - spring.datasource.driver-class-name=org.postgresql.Driver
+      - ids.workflow.client.url=http://ids-workflow:8081
+      - server.servlet.context-path=${IDS_CONTEXT_PATH}
+      - server.port=8080
+      - ids.workflow.jwt.passphrase=${IDS_WORKFLOW_JWT_PASSPHRASE}
+      - ids.license=${IDS_LICENSE}
+      - ids.web.security.users[0].username=admin
+      - ids.web.security.users[0].roles=ADMIN,ACTUATOR
+      - ids.web.security.users[0].password={noop}${IDS_ADMIN}
+      - ids.web.security.http-basic.enabled=true
+    volumes:
+      - /var/lib/docker/volumes/sng-project_idsphere.jar/_data/ids-generated-entities.jar:/web/WEB-INF/lib/ids-generated-entities.jar:ro
+      - ./idsphere/config/application.properties:/web/WEB-INF/classes/application.properties:ro
+     # - ./idsphere/config/sng-client.xml:/web/sng-client.xml:ro
+    networks:
+      - ids.network
+      - frontend
+    depends_on:
+      ids-workflow:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ids.rule=Host(`ids.${DOMAIN}`)"
+      - "traefik.http.routers.ids.entrypoints=websecure"
+      - "traefik.http.routers.ids.tls.certresolver=cloudflare"
+      - "traefik.http.services.ids.loadbalancer.server.port=8080"
+      - "traefik.docker.network=frontend"
