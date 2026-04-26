@@ -1,0 +1,54 @@
+# Configuration statique Traefik
+# Chargée au démarrage uniquement (redémarrage requis pour modifications)
+
+# API et dashboard
+api:
+  dashboard: true
+  insecure: false  # Dashboard accessible via HTTPS uniquement, pas sur :8080
+
+# Points d'entrée (ports d'écoute)
+entryPoints:
+  web:
+    address: ":80"
+    # Redirection HTTP → HTTPS (sera activée via middleware)
+  
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: cloudflare
+
+# Providers (sources de configuration)
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false  # Sécurité : seuls les conteneurs avec labels explicites sont exposés
+    network: frontend
+  
+  file:
+    directory: "/etc/traefik/dynamic"
+    watch: true  # Rechargement auto des fichiers dynamiques
+
+# Résolveurs de certificats
+certificatesResolvers:
+  cloudflare:
+    acme:
+      email: "admin@formindemo.fr"
+      storage: "/letsencrypt/acme.json"
+      dnsChallenge:
+        provider: cloudflare
+        delayBeforeCheck: 10s
+        resolvers:
+          - "1.1.1.1:53"
+          - "1.0.0.1:53"
+
+# Logs
+log:
+  level: INFO  # DEBUG en cas de souci
+
+accessLog:
+  filePath: "/var/log/traefik/access.log"
+  bufferingSize: 100
+
+serversTransport:
+  insecureSkipVerify: true

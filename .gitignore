@@ -1,0 +1,32 @@
+# Secrets et environnement
+.env
+.env.local
+.env.*.local
+secrets/
+*.key
+*.pem
+*.p12
+*.jks
+
+# Certificats Let's Encrypt
+traefik/letsencrypt/
+
+# Volumes et data
+backups/
+data/
+
+# Logs
+*.log
+logadmin*
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

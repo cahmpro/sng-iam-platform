@@ -1,0 +1,220 @@
+# Stack Sign&go + Traefik
+# Étape 1.1 : runtime applicatif avec TLS Let's Encrypt DNS-01
+
+services:
+  # ============================================================================
+  # TRAEFIK — Reverse proxy et gestion TLS
+  # ============================================================================
+  traefik:
+    image: traefik:v2.11
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      # Port 80 non exposé : pas nécessaire avec DNS-01
+    environment:
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+      DOCKER_API_VERSION: "1.45"
+    networks:
+      - frontend
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - ./traefik/letsencrypt:/letsencrypt
+      - traefik-logs:/var/log/traefik
+    labels:
+      # Dashboard Traefik accessible sur https://traefik.cah.formindemo.fr
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=cloudflare"
+      - "traefik.http.routers.dashboard.tls.domains[0].main=${DOMAIN}"
+      - "traefik.http.routers.dashboard.tls.domains[0].sans=*.${DOMAIN}"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-auth"
+      - "traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH}"
+      - "traefik.docker.network=frontend"
+
+  # ============================================================================
+  # SIGN&GO — Console admin
+  # ============================================================================
+  admin:
+    image: afr2k7pd.gra7.container-registry.ovh.net/fr-ilex/signandgo/signandgo-webserver-admin:10.1.0
+    container_name: admin
+    restart: unless-stopped
+    environment:
+      DATASOURCE_CONFIG_URL: "jdbc:postgresql://configuration.db:5432/sngconfiguration"
+      DATASOURCE_CONFIG_PWD: ${DB_PASSWORD}
+      DATASOURCE_CONFIG_LOGIN: snguser
+      DATASOURCE_TECH_URL: "jdbc:postgresql://technical.db:5432/sngcredentialsandtechnicaldata"
+      DATASOURCE_TECH_LOGIN: snguser
+      DATASOURCE_TECH_PWD: ${DB_PASSWORD}
+      DATASOURCE_LOGS_URL: "jdbc:postgresql://logs.db:5432/snglogs"
+      DATASOURCE_LOGS_LOGIN: snguser
+      DATASOURCE_LOGS_PWD: ${DB_PASSWORD}
+      SECSERVER_INET_NAME: "security.server"
+      WEBSERVER_ADMIN_BASIC_HTTP_LOGIN: admin
+      WEBSERVER_ADMIN_BASIC_HTTP_PWD: ${ADMIN_PASSWORD}
+      SIGNANDGO_LICENSE: ${SIGNANDGO_LICENSE}
+      LICENSE_KEY_FILE: "/docker.d/product.licenses/signandgo.license.key"
+    networks:
+      - sng.network
+      - frontend
+    volumes:
+      - cipher.configurationdb:/docker.d/cipher.configurationdb
+      - ./secrets/SngKey.key:/docker.d/product.licenses/signandgo.license.key:ro
+    depends_on:
+      configuration.db:
+        condition: service_healthy
+      security.server:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.admin.rule=Host(`admin.${DOMAIN}`)"
+      - "traefik.http.routers.admin.entrypoints=websecure"
+      - "traefik.http.routers.admin.tls.certresolver=cloudflare"
+      - "traefik.http.services.admin.loadbalancer.server.port=8443"
+      - "traefik.http.services.admin.loadbalancer.server.scheme=https"
+      - "traefik.docker.network=frontend"
+
+  # ============================================================================
+  # SIGN&GO — Portail utilisateur
+  # ============================================================================
+  user:
+    image: afr2k7pd.gra7.container-registry.ovh.net/fr-ilex/signandgo/signandgo-webserver-user:10.1.0
+    container_name: user
+    restart: unless-stopped
+    environment:
+      SECSERVER_INET_NAME: "security.server"
+      DATASOURCE_CONFIG_URL: "jdbc:postgresql://configuration.db:5432/sngconfiguration"
+      DATASOURCE_CONFIG_LOGIN: snguser
+      DATASOURCE_CONFIG_PWD: ${DB_PASSWORD}
+    networks:
+      - sng.network
+      - frontend
+    volumes:
+      - cipher.configurationdb:/docker.d/cipher.configurationdb
+      #- ./configs/spring-security.xml:/usr/local/tomcat/webapps/user/WEB-INF/custom/spring-security.xml:ro
+    depends_on:
+      configuration.db:
+        condition: service_healthy
+      security.server:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.user.rule=Host(`user.${DOMAIN}`)"
+      - "traefik.http.routers.user.entrypoints=websecure"
+      - "traefik.http.routers.user.tls.certresolver=cloudflare"
+      - "traefik.http.services.user.loadbalancer.server.port=8443"
+      - "traefik.http.services.user.loadbalancer.server.scheme=https"
+      - "traefik.docker.network=frontend"
+
+  # ============================================================================
+  # SIGN&GO — Security Server (cœur IAM)
+  # ============================================================================
+  security.server:
+    image: afr2k7pd.gra7.container-registry.ovh.net/fr-ilex/signandgo/signandgo-secserver:10.1.0
+    container_name: security.server
+    restart: unless-stopped
+    environment:
+      DATASOURCE_CONFIG_URL: "jdbc:postgresql://configuration.db:5432/sngconfiguration"
+      DATASOURCE_CONFIG_PWD: ${DB_PASSWORD}
+      DATASOURCE_CONFIG_LOGIN: snguser
+      SECSERVER_ID: "security.server"
+      JAVA_OPTS_XMS_SIZE: "256M"
+      JAVA_OPTS_XMX_SIZE: "1G"
+    ports:
+      - '3102:3102'
+      - '3103:3103'
+    networks:
+      - sng.network
+    volumes:
+      - cipher.configurationdb:/docker.d/cipher.configurationdb
+      - ./secrets/SngKey.key:/docker.d/product.licenses/signandgo.license.key:ro
+    depends_on:
+      configuration.db:
+        condition: service_healthy
+
+  # ============================================================================
+  # POSTGRESQL — Base de configuration Sign&go
+  # ============================================================================
+  configuration.db:
+    image: postgres:16
+    container_name: configuration.db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sngconfiguration
+      POSTGRES_USER: snguser
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - configuration.dbdata:/var/lib/postgresql/data
+    networks:
+      - sng.network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U snguser -d sngconfiguration"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ============================================================================
+  # POSTGRESQL — Base technique (credentials)
+  # ============================================================================
+  technical.db:
+    image: afr2k7pd.gra7.container-registry.ovh.net/fr-ilex/signandgo/signandgo-db-technical-postgres:10.1.0
+    container_name: technical.db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - technical.dbdata:/var/lib/postgresql/data
+    networks:
+      - sng.network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U snguser -d sngcredentialsandtechnicaldata"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ============================================================================
+  # POSTGRESQL — Base de logs applicatifs
+  # ============================================================================
+  logs.db:
+    image: afr2k7pd.gra7.container-registry.ovh.net/fr-ilex/signandgo/signandgo-db-logs-postgres:10.1.0
+    container_name: logs.db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - logs.dbdata:/var/lib/postgresql/data
+    networks:
+      - sng.network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U snguser -d snglogs"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+# ==============================================================================
+# VOLUMES
+# ==============================================================================
+volumes:
+  cipher.configurationdb:
+    external: true  # Créé manuellement, contient les clés de chiffrement
+  configuration.dbdata:
+  technical.dbdata:
+  logs.dbdata:
+  traefik-logs:
+
+# ==============================================================================
+# NETWORKS
+# ==============================================================================
+networks:
+  sng.network:
+    external: true  # Réseau interne Sign&go
+  frontend:
+    external: true  # Réseau exposé à Traefik

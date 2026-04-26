@@ -1,0 +1,28 @@
+# Configuration dynamique Traefik
+# Rechargée automatiquement sans redémarrage
+
+http:
+  middlewares:
+    # Redirection HTTP → HTTPS
+    redirect-to-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+    
+    # Headers de sécurité
+    security-headers:
+      headers:
+        frameDeny: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+        customFrameOptionsValue: "SAMEORIGIN"
+    
+    # Rate limiting (optionnel, à activer si nécessaire)
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 50
